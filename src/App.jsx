@@ -45,7 +45,7 @@ RULES:
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({
-      model:"claude-haiku-4-5-20251001",
+      model:"claude-3-haiku-20240307",
       max_tokens:1000,
       messages:[{role:"user",content:[
         {type:"image",source:{type:"base64",media_type:mediaType.startsWith("image/")?mediaType:"image/jpeg",data:base64}},
@@ -70,6 +70,39 @@ RULES:
     return map ? {...item,category:map.cat,learned:true} : {...item,learned:false};
   });
   return p;
+}
+
+// ── IMAGE COMPRESSION ────────────────────────────────────────────────────────
+async function compressImage(file, maxSizeKB=800) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      let {width, height} = img;
+      // Scale down if too large
+      const maxDim = 1600;
+      if (width > maxDim || height > maxDim) {
+        const ratio = Math.min(maxDim/width, maxDim/height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      // Try quality 0.7 first, then lower if still too big
+      let quality = 0.7;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length * 0.75 > maxSizeKB * 1024 && quality > 0.2) {
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.src = url;
+  });
 }
 
 // ── CSS ───────────────────────────────────────────────────────────────────────
@@ -409,8 +442,8 @@ function AddExpense({ data, update, toast, setPage }) {
   const handleFile=async(file)=>{
     if(!file) return; setStage("processing");
     try {
-      const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
-      const result=await ocrBill(b64,file.type||"image/jpeg",maps,allCats);
+      const b64=await compressImage(file);
+      const result=await ocrBill(b64,'image/jpeg',maps,allCats);
       setOcr(result); setStage("review");
     } catch(e) {
       const msg = e.message.includes("401") ? "Invalid API key — check VITE_ANTHROPIC_KEY in Vercel Settings" :
@@ -520,7 +553,7 @@ function BulkUpload({ data, update, toast, setPage, allCats, maps }) {
   const processFile = async (id, fileObj) => {
     setQueue(q=>q.map(f=>f.id===id?{...f,status:"processing"}:f));
     try {
-      const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(fileObj);});
+      const b64=await compressImage(fileObj);
       const ocr=await ocrBill(b64,fileObj.type||"image/jpeg",maps,allCats);
       setQueue(q=>q.map(f=>f.id===id?{...f,status:"review",ocr,expanded:true}:f));
     } catch(e) {
@@ -724,7 +757,7 @@ async function suggestCategory(itemName, existingCats) {
     const res = await fetch("/api/claude", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
-        model:"claude-haiku-4-5-20251001", max_tokens:50,
+        model:"claude-3-haiku-20240307", max_tokens:50,
         messages:[{role:"user",content:`What single category best fits this item: "${itemName}"? Choose from: ${existingCats.join(", ")}. Reply with ONLY the category name, nothing else.`}]
       })
     });
