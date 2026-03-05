@@ -43,7 +43,7 @@ RULES:
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method:"POST",
-    headers:{"Content-Type":"application/json"},
+    headers:{"Content-Type":"application/json","x-api-key":window.ANTHROPIC_API_KEY||"","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
     body: JSON.stringify({
       model:"claude-sonnet-4-20250514",
       max_tokens:1000,
@@ -412,7 +412,14 @@ function AddExpense({ data, update, toast, setPage }) {
       const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
       const result=await ocrBill(b64,file.type||"image/jpeg",maps,allCats);
       setOcr(result); setStage("review");
-    } catch(e) { toast("OCR failed: "+e.message,"error"); setStage("idle"); }
+    } catch(e) {
+      const msg = e.message.includes("401") ? "Invalid API key — check VITE_ANTHROPIC_KEY in Vercel Settings" :
+                  e.message.includes("403") ? "API key not authorised" :
+                  e.message.includes("API 4") ? "API error: "+e.message :
+                  "Scan failed: "+e.message;
+      toast(msg, "error");
+      setStage("idle");
+    }
   };
 
   const saveBill=()=>{
@@ -567,8 +574,16 @@ function BulkUpload({ data, update, toast, setPage, allCats, maps }) {
   const sLabel=s=>({pending:"Queued",processing:"Scanning…",review:"Review",done:"Saved",skipped:"Skipped",error:"Error"}[s]||s);
   const sCls=s=>({pending:"pend",processing:"proc",review:"rev",done:"done",error:"err"}[s]||"pend");
 
+  const apiKeyMissing = !window.ANTHROPIC_API_KEY || window.ANTHROPIC_API_KEY === "YOUR_API_KEY_HERE" || window.ANTHROPIC_API_KEY.length < 10;
+
   return (
     <div style={{maxWidth:820}}>
+      {apiKeyMissing&&(
+        <div style={{background:"#2a0e0e",border:"1px solid #f43f5e60",borderRadius:"var(--rs)",padding:"12px 16px",marginBottom:16,fontSize:13}}>
+          <div style={{color:"var(--rd)",fontWeight:700,marginBottom:4}}>⚠️ API Key Missing</div>
+          <div style={{color:"var(--tx2)"}}>Bill scanning won't work without an Anthropic API key. Add <code style={{background:"#ffffff10",padding:"1px 6px",borderRadius:4}}>VITE_ANTHROPIC_KEY</code> in your Vercel project → Settings → Environment Variables, then redeploy.</div>
+        </div>
+      )}
       <div className={`dz ${drag?"ov":""}`} onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);addFiles(e.dataTransfer.files);}} onClick={()=>document.getElementById("blk").click()}>
         <input id="blk" type="file" accept="image/*,.pdf" multiple style={{display:"none"}} onChange={e=>{addFiles(e.target.files);e.target.value="";}}/>
         <span className="di">📦</span><div className="dt">Drop multiple bills or click to browse</div><div className="ds mt4">Scanned one-by-one with AI — dates, amounts, items extracted</div>
@@ -614,7 +629,7 @@ function BulkUpload({ data, update, toast, setPage, allCats, maps }) {
             {f.status==="review"&&f.ocr&&<div className="fc g8" style={{marginRight:8}}><span className="badge bpu">{f.ocr.merchant}</span><span className="badge bam sy">{fmt(f.ocr.amount)}</span><span style={{fontSize:11,color:"var(--tx3)"}}>{new Set(f.ocr.items.map(i=>i.category)).size} cat</span></div>}
             {f.status==="done"&&f.ocr&&<span className="badge bgr" style={{marginRight:8}}>✓ {f.ocr.merchant}</span>}
             {f.status==="error"&&<button className="btn bg bsm" style={{marginRight:8,color:"var(--am)",fontSize:11}} onClick={e=>{e.stopPropagation();processFile(f.id,f.fileObj);}}>↻ Retry</button>}
-            <div style={{fontSize:11,color:"var(--tx3)",whiteSpace:"nowrap"}}>{sLabel(f.status)}</div>
+            <div style={{fontSize:11,color:f.status==="error"?"var(--rd)":"var(--tx3)",whiteSpace:"nowrap",maxWidth:220,overflow:"hidden",textOverflow:"ellipsis"}}>{f.status==="error"&&f.errMsg?f.errMsg:sLabel(f.status)}</div>
             {f.status!=="done"&&f.status!=="processing"&&<button className="brm" onClick={e=>{e.stopPropagation();remove(f.id);}}>✕</button>}
             {f.status==="review"&&<span style={{fontSize:11,color:"var(--tx3)",marginLeft:6}}>{f.expanded?"▲":"▼"}</span>}
           </div>
@@ -707,7 +722,7 @@ function ExpenseList({ data, update, toast }) {
 async function suggestCategory(itemName, existingCats) {
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST", headers:{"Content-Type":"application/json"},
+      method:"POST", headers:{"Content-Type":"application/json","x-api-key":window.ANTHROPIC_API_KEY||"","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
       body: JSON.stringify({
         model:"claude-sonnet-4-20250514", max_tokens:50,
         messages:[{role:"user",content:`What single category best fits this item: "${itemName}"? Choose from: ${existingCats.join(", ")}. Reply with ONLY the category name, nothing else.`}]
