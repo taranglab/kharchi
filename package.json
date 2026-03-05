@@ -1,7 +1,6 @@
 {
   "name": "kharchi",
   "version": "1.0.0",
-  "description": "Personal expense tracker with AI bill scanning",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -11,7 +10,8 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.10.0"
+    "recharts": "^2.10.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
