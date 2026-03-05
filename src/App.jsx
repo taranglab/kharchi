@@ -317,38 +317,100 @@ export default function App() {
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 function Auth({ data, update, toast }) {
   const [login, setLogin] = useState(true);
-  const [f, setF] = useState({name:"",email:"",password:""});
+  const [resetting, setResetting] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [f, setF] = useState({name:"",email:"",password:"",newPassword:""});
+
+  // Cross-device: sync users from shared storage on mount
+  const [syncing, setSyncing] = useState(true);
+  useEffect(() => {
+    window.storage.get("kharchi_users", true).then(r => {
+      if (r?.value) {
+        const sharedUsers = JSON.parse(r.value);
+        // Merge shared users into local data
+        const merged = [...data.users];
+        sharedUsers.forEach(su => { if (!merged.find(u=>u.id===su.id)) merged.push(su); });
+        if (merged.length !== data.users.length) update({users: merged});
+      }
+      setSyncing(false);
+    }).catch(() => setSyncing(false));
+  }, []);
+
+  const saveSharedUsers = (users) => {
+    window.storage.set("kharchi_users", JSON.stringify(users), true).catch(()=>{});
+  };
+
   const submit = () => {
+    if (resetting) {
+      if (!f.email||!f.newPassword) return toast("Fill all fields","error");
+      const idx = data.users.findIndex(u=>u.email===f.email);
+      if (idx===-1) return toast("No account with this email","error");
+      const updated = data.users.map(u=>u.email===f.email?{...u,password:f.newPassword}:u);
+      update({users:updated});
+      saveSharedUsers(updated);
+      toast("Password reset! Please sign in.","success");
+      setResetting(false);
+      setF({name:"",email:"",password:"",newPassword:""});
+      return;
+    }
     if (!f.email||!f.password) return toast("Fill all fields","error");
     if (login) {
       const u = data.users.find(u=>u.email===f.email&&u.password===f.password);
-      if (!u) return toast("Invalid credentials","error");
+      if (!u) return toast("Wrong email or password","error");
       update({currentUser:u});
     } else {
       if (!f.name) return toast("Name required","error");
-      if (data.users.find(u=>u.email===f.email)) return toast("Email exists","error");
+      if (data.users.find(u=>u.email===f.email)) return toast("Email already registered","error");
       const u={id:uid(),name:f.name,email:f.email,password:f.password};
-      update({users:[...data.users,u],currentUser:u});
+      const newUsers = [...data.users,u];
+      update({users:newUsers,currentUser:u});
+      saveSharedUsers(newUsers);
       toast("Welcome to Kharchi!","success");
     }
   };
+
+  if (syncing) return <div className="aw"><div className="ac"><div className="al">Kharchi<em>.</em></div><div className="as" style={{marginTop:24}}>Loading...</div></div></div>;
+
   return (
     <div className="aw">
       <div className="ag" style={{width:500,height:500,top:-200,left:-200,background:"radial-gradient(circle,#4f1b9018 0%,transparent 70%)"}}/>
       <div className="ag" style={{width:400,height:400,bottom:-150,right:-150,background:"radial-gradient(circle,#6366f115 0%,transparent 70%)"}}/>
       <div className="ac">
         <div className="al">Kharchi<em>.</em></div>
-        <div className="as">{login?"Track every rupee. Know your patterns.":"Start your expense journey today."}</div>
-        {!login&&<div className="fg"><label className="fl">Full Name</label><input className="fi" placeholder="Rahul Sharma" value={f.name} onChange={e=>setF({...f,name:e.target.value})}/></div>}
-        <div className="fg"><label className="fl">Email</label><input className="fi" type="email" placeholder="you@example.com" value={f.email} onChange={e=>setF({...f,email:e.target.value})}/></div>
-        <div className="fg"><label className="fl">Password</label><input className="fi" type="password" placeholder="••••••••" value={f.password} onChange={e=>setF({...f,password:e.target.value})} onKeyDown={e=>e.key==="Enter"&&submit()}/></div>
-        <button className="btn bp bfl mt8" onClick={submit}>{login?"Sign In →":"Create Account →"}</button>
-        <div className="dv"/>
-        <p style={{textAlign:"center",fontSize:13,color:"var(--tx2)"}}>
-          {login?"No account? ":"Have one? "}
-          <span style={{color:"var(--ac2)",cursor:"pointer",fontWeight:600}} onClick={()=>setLogin(!login)}>{login?"Sign up free":"Sign in"}</span>
-        </p>
-        <p className="dim mt12" style={{textAlign:"center",fontSize:11}}>Any email + password to register</p>
+        <div className="as">{resetting?"Reset your password":login?"Track every rupee. Know your patterns.":"Start your expense journey today."}</div>
+
+        {resetting ? (
+          <>
+            <div className="fg"><label className="fl">Email</label><input className="fi" type="email" placeholder="you@example.com" value={f.email} onChange={e=>setF({...f,email:e.target.value})}/></div>
+            <div className="fg"><label className="fl">New Password</label>
+              <div style={{position:"relative"}}>
+                <input className="fi" type={showPw?"text":"password"} placeholder="New password" value={f.newPassword} onChange={e=>setF({...f,newPassword:e.target.value})} style={{paddingRight:44}}/>
+                <button onClick={()=>setShowPw(!showPw)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--tx3)",fontSize:14}}>{showPw?"🙈":"👁"}</button>
+              </div>
+            </div>
+            <button className="btn bp bfl mt8" onClick={submit}>Reset Password →</button>
+            <p style={{textAlign:"center",fontSize:13,color:"var(--tx2)",marginTop:12,cursor:"pointer"}} onClick={()=>setResetting(false)}>← Back to Sign In</p>
+          </>
+        ) : (
+          <>
+            {!login&&<div className="fg"><label className="fl">Full Name</label><input className="fi" placeholder="Rahul Sharma" value={f.name} onChange={e=>setF({...f,name:e.target.value})}/></div>}
+            <div className="fg"><label className="fl">Email</label><input className="fi" type="email" placeholder="you@example.com" value={f.email} onChange={e=>setF({...f,email:e.target.value})}/></div>
+            <div className="fg"><label className="fl">Password</label>
+              <div style={{position:"relative"}}>
+                <input className="fi" type={showPw?"text":"password"} placeholder="••••••••" value={f.password} onChange={e=>setF({...f,password:e.target.value})} onKeyDown={e=>e.key==="Enter"&&submit()} style={{paddingRight:44}}/>
+                <button onClick={()=>setShowPw(!showPw)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"var(--tx3)",fontSize:14}}>{showPw?"🙈":"👁"}</button>
+              </div>
+            </div>
+            <button className="btn bp bfl mt8" onClick={submit}>{login?"Sign In →":"Create Account →"}</button>
+            {login&&<p style={{textAlign:"center",fontSize:13,color:"var(--ac2)",cursor:"pointer",marginTop:10,fontWeight:500}} onClick={()=>setResetting(true)}>Forgot password?</p>}
+            <div className="dv"/>
+            <p style={{textAlign:"center",fontSize:13,color:"var(--tx2)"}}>
+              {login?"No account? ":"Have one? "}
+              <span style={{color:"var(--ac2)",cursor:"pointer",fontWeight:600}} onClick={()=>{setLogin(!login);setF({name:"",email:"",password:"",newPassword:""});}}>{login?"Sign up free":"Sign in"}</span>
+            </p>
+            <p className="dim mt12" style={{textAlign:"center",fontSize:11}}>Any email + password to register</p>
+          </>
+        )}
       </div>
     </div>
   );
