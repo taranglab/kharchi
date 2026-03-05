@@ -41,9 +41,9 @@ RULES:
 - items: list EVERY line item including ALL fees. Delivery fee, handling fee, marketplace fee, convenience fee, platform fee, GST, taxes → capture each separately with category "Fees & Charges". If no items visible, one item with total.
 - category from: ${[...cats, "Fees & Charges"].join(", ")}. delivery/handling/marketplace/convenience/platform fee=Fees & Charges, Amazon shopping=Shopping, baby formula=Baby Care, electricity=Utilities, food delivery=Food & Dining, medicine=Healthcare, protein/supplements=Health Supplements. For unknown items use your intelligence to pick the best category, never use Other if something better fits.`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/claude", {
     method:"POST",
-    headers:{"Content-Type":"application/json","x-api-key":window.ANTHROPIC_API_KEY||"","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    headers:{"Content-Type":"application/json"},
     body: JSON.stringify({
       model:"claude-sonnet-4-20250514",
       max_tokens:1000,
@@ -721,8 +721,8 @@ function ExpenseList({ data, update, toast }) {
 // Smart auto-category suggestions via Claude
 async function suggestCategory(itemName, existingCats) {
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST", headers:{"Content-Type":"application/json","x-api-key":window.ANTHROPIC_API_KEY||"","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    const res = await fetch("/api/claude", {
+      method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
         model:"claude-sonnet-4-20250514", max_tokens:50,
         messages:[{role:"user",content:`What single category best fits this item: "${itemName}"? Choose from: ${existingCats.join(", ")}. Reply with ONLY the category name, nothing else.`}]
