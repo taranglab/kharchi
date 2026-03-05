@@ -45,7 +45,7 @@ RULES:
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({
-      model:"claude-3-haiku-20240307",
+      model:"claude-haiku-4-5-20251001",
       max_tokens:1000,
       messages:[{role:"user",content:[
         {type:"image",source:{type:"base64",media_type:mediaType.startsWith("image/")?mediaType:"image/jpeg",data:base64}},
@@ -724,7 +724,7 @@ async function suggestCategory(itemName, existingCats) {
     const res = await fetch("/api/claude", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({
-        model:"claude-3-haiku-20240307", max_tokens:50,
+        model:"claude-haiku-4-5-20251001", max_tokens:50,
         messages:[{role:"user",content:`What single category best fits this item: "${itemName}"? Choose from: ${existingCats.join(", ")}. Reply with ONLY the category name, nothing else.`}]
       })
     });
